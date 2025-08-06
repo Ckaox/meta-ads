@@ -2,29 +2,46 @@ from fastapi import FastAPI, Query
 from fastapi.responses import JSONResponse
 from playwright.async_api import async_playwright
 import uvicorn
+import re
 
 app = FastAPI()
 
-@app.get("/get_page_id")
-async def get_page_id(fb_url: str = Query(..., description="Facebook page URL")):
+@app.get("/check_page_ads")
+async def check_page_ads(fb_url: str = Query(..., description="Facebook page URL")):
     try:
         async with async_playwright() as p:
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
 
+            # Entrar a Facebook y extraer el pageID
             await page.goto(fb_url, timeout=30000)
             await page.wait_for_timeout(3000)
-
             html = await page.content()
-
-            # Buscar el "pageID" en el HTML
-            import re
             match = re.search(r'"pageID":"(\d+)"', html)
-            if match:
-                page_id = match.group(1)
-                return {"success": True, "page_id": page_id}
-            else:
+
+            if not match:
                 return JSONResponse(status_code=404, content={"success": False, "error": "Page ID not found"})
+
+            page_id = match.group(1)
+
+            # Buscar en la AdLibrary con el ID extraido
+            ad_library_url = f"https://www.facebook.com/ads/library/?active_status=active&ad_type=all&country=ES&view_all_page_id={page_id}"
+            await page.goto(ad_library_url, timeout=30000)
+            await page.wait_for_timeout(4000)
+            ad_html = await page.content()
+
+            # Verificar si tiene anuncios activos
+            ads_active = "Ad started" in ad_html
+            ads_count = len(re.findall(r"Ad started", ad_html))
+
+            await browser.close()
+
+            return {
+                "success": True,
+                "page_id": page_id,
+                "ads_active": ads_active,
+                "ads_count": ads_count
+            }
 
     except Exception as e:
         return JSONResponse(status_code=500, content={"success": False, "error": str(e)})
