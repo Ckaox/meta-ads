@@ -2,10 +2,8 @@ services:
   - type: web
     name: fb-page-id-scraper
     runtime: python
-    buildCommand: |
-      pip install -r requirements.txt
-      playwright install chromium
-    startCommand: uvicorn main:app --host 0.0.0.0 --port 8000
+    buildCommand: pip install -r requirements.txt
+    startCommand: playwright install chromium && uvicorn main:app --host=0.0.0.0 --port=8000
     envVars:
       - key: PLAYWRIGHT_BROWSERS_PATH
         value: /opt/render/project/.playwright
